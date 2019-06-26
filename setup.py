@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="IMNN",
-    version="0.1rc1",
+    version="0.1dev9",
     author="Tom Charnock",
     author_email="charnock@iap.fr",
     description="Using neural networks to extract sufficient statistics from \
@@ -21,7 +21,7 @@ setuptools.setup(
     ],
     python_requires=">=3.6",
     install_requires=[
-          "tensorflow>=1.12.0",
+          "tensorflow>=1.13.0",
           "tqdm>=4.29.0",
           "numpy>=1.16.0",
           "scipy>=1.2.0"

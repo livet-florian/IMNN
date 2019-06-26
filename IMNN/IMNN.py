@@ -6,7 +6,7 @@ model parameters.
 """
 
 
-__version__ = '0.1rc1'
+__version__ = '0.1dev9'
 __author__ = "Tom Charnock"
 
 
@@ -747,12 +747,21 @@ class IMNN():
                     cov,
                     tf.eye(self.n_summaries))),
             name="square_norm_covariance")
+        other_square_norm = tf.reduce_sum(
+            tf.square(
+                tf.subtract(
+                    inv_cov,
+                    tf.eye(self.n_summaries))),
+            name="square_norm_inverse_covariance")
         coupling = tf.placeholder(
             dtype=self._FLOATX,
             shape=(),
             name="coupling")
-        loss = tf.subtract(
-            tf.multiply(coupling, square_norm), logdetfisher, name="loss")
+        loss_cond = tf.cond(tf.less(square_norm, tf.divide(1., coupling)),
+                            lambda: -logdetfisher,
+                            lambda: tf.add(square_norm, other_square_norm),
+                            name="loss_cond")
+        loss = tf.identity(loss_cond, name="loss")
         fisher_gradient = tf.identity(
             tf.gradients(
                 loss,
