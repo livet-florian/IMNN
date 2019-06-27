@@ -138,7 +138,7 @@ class IMNN():
         self.reset_gradients = None
         self.apply_gradients = None
 
-    def begin_session(self):
+    def begin_session(self, score_compression=False):
         """Start TF session with minimal GPU memory usage
 
         The TF session is started with growth allowed on the GPU to allow for
@@ -157,7 +157,8 @@ class IMNN():
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
         self.sess.run(tf.global_variables_initializer())
-        self.save_network(first_time=True)
+        if not score_compression:
+            self.save_network(first_time=True)
 
     def reinitialise_session(self):
         """Reset and/or reinitialise all TF variables
@@ -838,6 +839,75 @@ class IMNN():
             (self.store_gradients[i], self.gradients[i][1])
             for i in range(len(self.store_gradients))])
         self.begin_session()
+
+    def score_compression(self, covariance, mean, mean_derivative):
+
+        input_data = tf.placeholder(
+            dtype=self._FLOATX,
+            shape=[None] + self.input_shape,
+            name="data")
+
+        fiducial = tf.Variable(
+            [self.fiducial],
+            dtype=self._FLOATX,
+            trainable=False,
+            name="fiducial")
+
+        dmudtheta = tf.Variable(
+            mean_derivative,
+            dtype=self._FLOATX,
+            trainable=False,
+            name="mean_derivative")
+        mu = tf.Variable(
+            mean,
+            dtype=self._FLOATX,
+            trainable=False,
+            name="mean")
+        cov = tf.Variable(
+            covariance,
+            dtype=self._FLOATX,
+            trainable=False,
+            name="covariance")
+        inv_cov = tf.linalg.inv(cov, name="inverse_covariance")
+        compression = tf.einsum(
+            'ij,kj->ki',
+            inv_cov,
+            dmudtheta,
+            name="compression")
+        onesided_fisher = tf.matrix_band_part(
+            tf.einsum('ij,kj->ki', dmudtheta, compression),
+            0,
+            -1,
+            name="onesided_fisher")
+        fisher = tf.identity(
+            tf.multiply(
+                0.5,
+                tf.add(
+                    onesided_fisher,
+                    tf.transpose(onesided_fisher))),
+            name="fisher")
+        inv_fisher = tf.identity(tf.linalg.inv(fisher),
+                                 name="inverse_fisher")
+        temp_logdetfisher = tf.linalg.slogdet(fisher)
+        logdetfisher = tf.multiply(
+            temp_logdetfisher[0],
+            temp_logdetfisher[1],
+            name="logdetfisher")
+
+        MLE = tf.add(
+            fiducial,
+            tf.einsum(
+                "ij,kj->ki",
+                inv_fisher,
+                tf.einsum(
+                    "ij,kj->ki",
+                    compression,
+                    tf.subtract(
+                        tf.reshape(input_data,
+                                   (tf.shape(input_data)[0], -1)),
+                        mu))),
+            name="MLE")
+        self.begin_session(score_compression=True)
 
     def train(
             self, updates, at_once, learning_rate, constraint_strength=2.,
