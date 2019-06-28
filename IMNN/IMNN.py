@@ -758,11 +758,16 @@ class IMNN():
             dtype=self._FLOATX,
             shape=(),
             name="coupling")
-        loss_cond = tf.cond(tf.less(square_norm, tf.divide(1., coupling)),
-                            lambda: -logdetfisher,
-                            lambda: tf.add(square_norm, other_square_norm),
-                            name="loss_cond")
-        loss = tf.identity(loss_cond, name="loss")
+        #loss_cond = tf.cond(tf.less(square_norm, tf.divide(1., coupling)),
+        #                    lambda: -logdetfisher,
+        #                    lambda: tf.add(square_norm, other_square_norm),
+        #                    name="loss_cond")
+        loss = tf.subtract(
+            tf.multiply(
+                coupling,
+                tf.add(square_norm, other_square_norm)),
+            logdetfisher, name="loss")
+        #tf.identity(loss_cond, name="loss")
         fisher_gradient = tf.identity(
             tf.gradients(
                 loss,
